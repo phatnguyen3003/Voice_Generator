@@ -29,7 +29,7 @@ Voice Generator is a powerful desktop and web-based application that leverages:
 ## 📋 System Requirements
 
 - **OS**: Windows 7 or later (Python-based, may work on other OS with proper setup)
-- **Python**: Version 3.8 or higher
+- **Python**: Version 3.10 or higher
 - **RAM**: Minimum 8GB (16GB recommended for smooth operation)
 - **GPU**: NVIDIA GPU with CUDA support recommended for faster processing (optional)
 - **Storage**: At least 5GB free space for models
@@ -298,9 +298,6 @@ To improve the Voice Generator:
 3. Optimize code for better performance
 4. Create language-specific voice models
 
-## 📝 License
-
-[Specify your project license here]
 
 ## 🔗 References and Credits
 
@@ -334,3 +331,4 @@ For issues, questions, or suggestions:
 **Last Updated**: January 2026  
 **Version**: 2.0  
 **Status**: Active Development
+
