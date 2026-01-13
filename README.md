@@ -329,6 +329,7 @@ For issues, questions, or suggestions:
 ---
 
 **Last Updated**: January 2026  
-**Version**: 2.0  
+**Version**: 1.0  
 **Status**: Active Development
+
 
