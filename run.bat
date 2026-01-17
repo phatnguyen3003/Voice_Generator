@@ -2,91 +2,64 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-echo.
 echo ============================================================
-echo    Voice Generator - Automated Setup ^& Execution
+echo      VOICE GENERATOR - FULL SETUP (MODELS + DEPENDENCIES)
 echo ============================================================
-echo.
 
-cd /d "%~dp0"
-
-:: 0. Check Python Installation
-echo [0/5] Checking Python installation...
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo ❌ Error: Python is not installed or not added to your PATH.
-    echo Please install Python 3.8 or higher from https://www.python.org
-    pause
-    exit /b 1
-)
-echo ✅ Python found.
-echo.
-
-:: 1. Create/Activate Virtual Environment
+:: 1. Kiểm tra và Kích hoạt môi trường ảo
 if not exist "venv" (
-    echo [1/5] Creating virtual environment...
-    python -m venv venv || (
-        echo ❌ Failed to create virtual environment.
+    echo [1/6] Đang tạo môi trường ảo mới...
+    python -m venv venv
+)
+call "venv\Scripts\activate.bat"
+echo ✅ Đã kích hoạt môi trường ảo.
+
+:: 2. Cài đặt Torch CPU (Bắt buộc phải cài đúng bản này trước)
+echo [2/6] Đang cài đặt PyTorch (Bản CPU)...
+python -m pip install torch==2.5.1 torchaudio==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu --quiet
+echo ✅ Hoàn thành cài đặt Torch.
+
+:: 3. Cài đặt các thư viện lõi để chạy script tải model và giao diện
+echo [3/6] Cài đặt thư viện hỗ trợ tải và giao diện...
+python -m pip install eel edge-tts librosa unidecode huggingface_hub tqdm --quiet
+echo ✅ Thư viện hỗ trợ sẵn sàng.
+
+:: 4. Kiểm tra và tải Checkpoint OpenVoice V2
+echo [4/6] Kiểm tra AI Model Checkpoints...
+:: Kiểm tra sự tồn tại của model chính, nếu thiếu sẽ chạy script tải
+if not exist "checkpoints_v2\converter\checkpoint.pth" (
+    echo ⚠️ Checkpoint missing. Đang chạy download_models.py...
+    python download_models.py
+    if errorlevel 1 (
+        echo ❌ Lỗi khi tải Model. Kiểm tra kết nối mạng hoặc Git!
         pause
         exit /b 1
     )
-)
-call "venv\Scripts\activate.bat"
-echo ✅ Virtual environment activated.
-echo.
-
-:: 2. Upgrade Pip and Install Download Tools
-echo [2/5] Installing download utilities...
-python -m pip install --upgrade pip -q
-python -m pip install huggingface_hub tqdm -q
-echo ✅ Download utilities ready.
-echo.
-
-:: 3. Run the Model Downloader (download_models.py)
-echo [3/5] Checking AI Model Checkpoints...
-if not exist "checkpoints_v2\converter\checkpoint.pth" (
-    echo ⚠️  Checkpoints missing. Starting automated download...
-    python download_models.py
+    echo ✅ Đã tải xong Model Checkpoints.
 ) else (
-    echo ✅ OpenVoice V2 Checkpoints found.
+    echo ✅ OpenVoice V2 Checkpoints đã tồn tại.
 )
-echo.
 
-:: 4. Install Project Dependencies
-echo [4/5] Installing project dependencies...
-python -m pip install -r requirements.txt --no-deps -q || (
-    echo.
-    echo ⚠️  Notice: Some minor version conflicts were detected and ignored.
+:: 5. Cài đặt cưỡng chế từng dòng từ requirements.txt
+echo [5/6] Đang cài đặt toàn bộ danh sách thư viện (Bỏ qua xung đột)...
+for /f "tokens=*" %%i in (requirements.txt) do (
+    set "line=%%i"
+    if not "!line!"=="" (
+        echo !line! | findstr /i "torch" >nul
+        if errorlevel 1 (
+            python -m pip install "!line!" --no-deps --quiet --prefer-binary
+        )
+    )
 )
-echo ✅ Dependencies finalized.
-echo.
+echo ✅ Cấu trúc thư viện đã hoàn tất.
 
-:: 5. Ensure Web Directory Structure
-echo [5/5] Organizing workspace folders...
-for %%d in (processed used temp_edit temp_preview) do (
-    if not exist "web\%%d" mkdir "web\%%d"
-)
-echo ✅ Directories verified.
-
-echo.
-echo ============================================================
-echo    SETUP COMPLETE! Launching Voice Generator...
-echo ============================================================
-echo.
-
-:: Run the Main Application immediately
+:: 6. Khởi chạy ứng dụng
+echo [6/6] Đang khởi chạy Voice Generator...
+echo ------------------------------------------------------------
 python function.py
 
-:: If the application crashes, keep the window open for debugging
 if errorlevel 1 (
     echo.
-    echo ❌ The application exited with an error.
-    echo Check the logs above for details.
+    echo ❌ Ứng dụng gặp lỗi. Vui lòng kiểm tra log phía trên.
     pause
 )
-
-:: Optional: Remove the 'pause' below if you want the window to close 
-:: automatically when you exit the app normally.
-echo.
-echo Application closed.
-pause
