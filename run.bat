@@ -1,65 +1,63 @@
 @echo off
-chcp 65001 >nul
-setlocal enabledelayedexpansion
+title Edge-TTS AI Generator Studio Launcher
 
-echo ============================================================
-echo      VOICE GENERATOR - FULL SETUP (MODELS + DEPENDENCIES)
-echo ============================================================
+echo ======================================================
+echo    Edge-TTS AI Generator Studio - Launcher
+echo ======================================================
 
-:: 1. Kiểm tra và Kích hoạt môi trường ảo
-if not exist "venv" (
-    echo [1/6] Đang tạo môi trường ảo mới...
+REM 1. Kiem tra Python
+echo [*] Checking Python...
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Python is not installed or not in PATH.
+    echo Please install Python 3.10 or higher.
+    pause
+    exit /b
+)
+
+REM 2. Tao moi truong ao neu chua co
+if not exist "venv\" (
+    echo [1/4] Creating virtual environment...
     python -m venv venv
-)
-call "venv\Scripts\activate.bat"
-echo ✅ Đã kích hoạt môi trường ảo.
-
-:: 2. Cài đặt Torch CPU (Bắt buộc phải cài đúng bản này trước)
-echo [2/6] Đang cài đặt PyTorch (Bản CPU)...
-python -m pip install torch==2.5.1 torchaudio==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cpu --quiet
-echo ✅ Hoàn thành cài đặt Torch.
-
-:: 3. Cài đặt các thư viện lõi để chạy script tải model và giao diện
-echo [3/6] Cài đặt thư viện hỗ trợ tải và giao diện...
-python -m pip install eel edge-tts librosa unidecode huggingface_hub tqdm --quiet
-echo ✅ Thư viện hỗ trợ sẵn sàng.
-
-:: 4. Kiểm tra và tải Checkpoint OpenVoice V2
-echo [4/6] Kiểm tra AI Model Checkpoints...
-:: Kiểm tra sự tồn tại của model chính, nếu thiếu sẽ chạy script tải
-if not exist "checkpoints_v2\converter\checkpoint.pth" (
-    echo ⚠️ Checkpoint missing. Đang chạy download_models.py...
-    python download_models.py
-    if errorlevel 1 (
-        echo ❌ Lỗi khi tải Model. Kiểm tra kết nối mạng hoặc Git!
-        pause
-        exit /b 1
-    )
-    echo ✅ Đã tải xong Model Checkpoints.
 ) else (
-    echo ✅ OpenVoice V2 Checkpoints đã tồn tại.
+    echo [1/4] Virtual environment found.
 )
 
-:: 5. Cài đặt cưỡng chế từng dòng từ requirements.txt
-echo [5/6] Đang cài đặt toàn bộ danh sách thư viện (Bỏ qua xung đột)...
-for /f "tokens=*" %%i in (requirements.txt) do (
-    set "line=%%i"
-    if not "!line!"=="" (
-        echo !line! | findstr /i "torch" >nul
-        if errorlevel 1 (
-            python -m pip install "!line!" --no-deps --quiet --prefer-binary
-        )
-    )
-)
-echo ✅ Cấu trúc thư viện đã hoàn tất.
+REM 3. Kich hoat va cai dat thu vien
+echo [2/4] Installing dependencies...
+call venv\Scripts\activate.bat
 
-:: 6. Khởi chạy ứng dụng
-echo [6/6] Đang khởi chạy Voice Generator...
-echo ------------------------------------------------------------
-python function.py
+REM Cap nhat pip
+python -m pip install --upgrade pip
+
+REM Cai dat tu requirements.txt
+pip install -r requirements.txt
+if errorlevel 1 (
+    echo [ERROR] Failed to install dependencies.
+    pause
+    exit /b
+)
+
+REM 4. Tai Models va Cong cu
+echo [3/4] Checking FFmpeg and AI Models...
+python function/download_models.py
+if errorlevel 1 (
+    echo [ERROR] Model download failed.
+    pause
+    exit /b
+)
+
+REM 5. Chay ung dung
+echo [4/4] Launching App...
+echo.
+python main.py
 
 if errorlevel 1 (
     echo.
-    echo ❌ Ứng dụng gặp lỗi. Vui lòng kiểm tra log phía trên.
+    echo [ERROR] Application crashed.
     pause
 )
+
+echo.
+echo Launching finished.
+pause
