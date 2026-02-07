@@ -24,6 +24,10 @@ try:
     print("✅ ToneColorConverter and se_extractor loaded")
 except ImportError:
     print("⚠️ Warning: se_extractor not found, you will not be able to extract sample voices.")
+import unicodedata
+import re
+
+
 
 # --- SYSTEM CONFIGURATION ---
 
@@ -68,7 +72,7 @@ def save_preset(self):
             break
         counter += 1
 
-    dialog = ctk.CTkInputBox(text="Enter name for the voice preset:", title="Save Preset CFG")
+    dialog = ctk.CTkInputDialog(text="Enter name for the voice preset:", title="Save Preset CFG")
     dialog.after(10, lambda: dialog._entry.insert(0, default_name)) 
     
     preset_name = dialog.get_input()
@@ -514,15 +518,37 @@ def play_one(self, paragraph_text):
 
 
 
+def slugify_text(text, length=30):
+    """
+    Chuyển văn bản thành không dấu, loại bỏ ký tự đặc biệt để làm tên file.
+    """
+    if not text:
+        return ""
+    
+    # 1. Chuyển Unicode dựng sẵn về dạng tổ hợp (NFD) để tách dấu
+    # Ví dụ: "ế" sẽ thành "ê" + "ˊ"
+    text = unicodedata.normalize('NFD', text)
+    
+    # 2. Loại bỏ các ký tự dấu (Non-spacing Mark)
+    text = "".join([c for c in text if unicodedata.category(c) != 'Mn'])
+    
+    # 3. Chuyển chữ "đ" sang "d" (vì bước trên không xử lý được chữ đ/Đ)
+    text = text.replace('đ', 'd').replace('Đ', 'D')
+    
+    # 4. Loại bỏ ký tự đặc biệt, chỉ giữ lại chữ cái, số và khoảng trắng
+    clean_text = re.sub(r'[\\/*?:"<>|]', "", text)
+    
+    # 5. Cắt 30 ký tự đầu và xóa khoảng trắng thừa ở 2 đầu
+    return clean_text[:length].strip()
+
+
+
+
 def save_one(self, paragraph_text):
-    """
-    Function to save audio file of a specific paragraph.
-    Suggested name: preset_HHhMM_DD-MM-YYYY.wav
-    """
-    # 1. Determine Index of paragraph to find correct file in temp
+    """Lưu file audio của đoạn văn bản cụ thể với tên không dấu (max 30 ký tự)"""
+    # 1. Xác định Index (giữ nguyên logic cũ)
     items = self.queue_frame.winfo_children()
     found_idx = -1
-    
     for i, item in enumerate(items):
         if hasattr(item, "paragraph_text") and item.paragraph_text == paragraph_text:
             found_idx = i + 1
@@ -532,43 +558,37 @@ def save_one(self, paragraph_text):
         messagebox.showerror("Error", "Could not determine segment index.")
         return
 
-    # 2. Determine source file path (Priority .wav as Clone outputs .wav)
+    # 2. Xác định đường dẫn nguồn
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     temp_dir = os.path.join(base_dir, "temp")
-    
     src_wav = os.path.join(temp_dir, f"{found_idx}.wav")
     src_mp3 = os.path.join(temp_dir, f"{found_idx}.mp3")
-    
-    src_path = None
-    if os.path.exists(src_wav):
-        src_path = src_wav
-    elif os.path.exists(src_mp3):
-        src_path = src_mp3
+    src_path = src_wav if os.path.exists(src_wav) else src_mp3 if os.path.exists(src_mp3) else None
 
     if not src_path:
-        messagebox.showwarning("Warning", f"Segment {found_idx} audio not created yet. Please click 'Gen' first.")
+        messagebox.showwarning("Warning", f"Segment {found_idx} audio not created yet.")
         return
 
-    # 3. Create proposed filename based on real time
-    now = datetime.now()
-    # preset_14h30_22-01-2026.wav
-    suggested_name = now.strftime(f"preset_%Hh%M_%d-%m-%Y_segment_{found_idx}")
-    ext = os.path.splitext(src_path)[1] # Get original file extension (.wav or .mp3)
+    # 3. Tạo tên file sạch (không dấu, max 30 ký tự)
+    clean_name = slugify_text(paragraph_text, 30)
+    if not clean_name:
+        clean_name = f"segment_{found_idx}"
+        
+    ext = os.path.splitext(src_path)[1]
 
     # 4. Mở cửa sổ lưu file
     save_path = filedialog.asksaveasfilename(
         title="Save paragraph audio",
-        initialfile=f"{suggested_name}{ext}",
+        initialfile=f"{clean_name}{ext}",
         defaultextension=ext,
         filetypes=[("Audio Files", f"*{ext}"), ("All Files", "*.*")]
     )
 
-    # 5. Perform copy and notification
+    # 5. Thực hiện copy
     if save_path:
         try:
             shutil.copy2(src_path, save_path)
-            messagebox.showinfo("Success", f"Saved segment {found_idx} successfully!")
-            print(f"✅ Saved: {save_path}")
+            messagebox.showinfo("Success", f"Saved successfully!")
         except Exception as e:
             messagebox.showerror("Save Error", f"Could not save file: {str(e)}")
 
@@ -1070,10 +1090,7 @@ def play_all(self):
 
 
 def save_all(self):
-    """
-    Function to save entire list.
-    """
-    # Get item list from queue_frame
+    """Lưu toàn bộ danh sách với tên file sạch (không dấu)"""
     items = self.queue_frame.winfo_children()
     if not items:
         messagebox.showwarning("Notice", "List is empty!")
@@ -1086,44 +1103,39 @@ def save_all(self):
     choice = messagebox.askyesnocancel("Save All", msg)
     if choice is None: return
 
-    if choice is True: # AUTOMATIC MODE
+    if choice is True: # CHẾ ĐỘ TỰ ĐỘNG (Batch save)
         target_dir = filedialog.askdirectory(title="Select save folder")
         if not target_dir: return
         
-        now_str = datetime.now().strftime("%Hh%M_%d-%m-%Y")
         count = 0
         for i, item in enumerate(items):
             if hasattr(item, "paragraph_text"):
                 idx = i + 1
-                # Logic to find source file same as save_one
+                text_content = item.paragraph_text
+                
+                # Tìm file nguồn trong temp
                 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 temp_dir = os.path.join(base_dir, "temp")
                 src_path = None
-                for ext in [".wav", ".mp3"]:
-                    p = os.path.join(temp_dir, f"{idx}{ext}")
+                for ext_type in [".wav", ".mp3"]:
+                    p = os.path.join(temp_dir, f"{idx}{ext_type}")
                     if os.path.exists(p):
                         src_path = p
                         break
                 
                 if src_path:
                     ext = os.path.splitext(src_path)[1]
-                    dest = os.path.join(target_dir, f"preset_{now_str}_seg{idx}{ext}")
+                    # Tạo tên file sạch: "SốTT_NoiDungKhongDau.wav"
+                    clean_name = slugify_text(text_content, 30)
+                    file_name = f"{idx:02d}_{clean_name}{ext}"
+                    
+                    dest = os.path.join(target_dir, file_name)
                     shutil.copy2(src_path, dest)
                     count += 1
-        messagebox.showinfo("Success", f"Saved {count} files.")
+        messagebox.showinfo("Success", f"Saved {count} files successfully.")
 
-    elif choice is False: # MANUAL MODE
-        # To avoid AttributeError, call save_one through module containing it
-        # or ensure self is indeed the object containing save_one
-        from function import cfg  # Import this file to call function if self fails
-        
+    elif choice is False: # CHẾ ĐỘ THỦ CÔNG
         for item in items:
             if hasattr(item, "paragraph_text"):
-                # Try calling via self, if fails then call directly from module
-                try:
-                    self.save_one(item.paragraph_text)
-                except AttributeError:
-                    # Nếu 'self' là đối tượng Tkinter, ta phải dùng cách gọi này:
-                    save_one(self, item.paragraph_text) 
-
-        messagebox.showinfo("Complete", "Finished processing list.")
+                # Gọi save_one sẽ tự động dùng logic tên không dấu mới
+                self.save_one(item.paragraph_text)
